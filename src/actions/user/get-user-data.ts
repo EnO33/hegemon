@@ -1,4 +1,4 @@
-// src/actions/user/get-user-data.ts
+// src/actions/user/get-user-data.ts (version corrigée)
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
@@ -21,7 +21,7 @@ export async function getUserData() {
         cities: {
           include: {
             buildings: true,
-            units: true,
+            units: true, // Inclure les unités
           },
         },
       },
@@ -33,7 +33,10 @@ export async function getUserData() {
 
     // Mettre à jour les ressources de toutes les cités
     const updatedCities = await Promise.all(
-      user.cities.map((city: DbCity) => updateCityResources(city.id))
+      user.cities.map(async (city: DbCity) => {
+        const updated = await updateCityResources(city.id);
+        return updated || city;
+      })
     );
 
     const responseData: UserDataResponse = {
@@ -85,7 +88,7 @@ export async function getUserCity(cityId: string) {
       },
       include: {
         buildings: true,
-        units: true,
+        units: true, // Inclure les unités
       },
     });
 
@@ -98,7 +101,7 @@ export async function getUserCity(cityId: string) {
 
     return {
       success: true,
-      data: updatedCity,
+      data: updatedCity || city,
     };
   } catch (error) {
     console.error('Erreur getUserCity:', error);

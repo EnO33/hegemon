@@ -1,4 +1,4 @@
-// src/lib/db/index.ts
+// src/lib/db/index.ts (version corrigée)
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
@@ -17,7 +17,10 @@ if (process.env.NODE_ENV !== 'production') {
 export const updateCityResources = async (cityId: string) => {
   const city = await db.city.findUnique({
     where: { id: cityId },
-    include: { buildings: true }
+    include: { 
+      buildings: true,
+      units: true // Inclure les unités
+    }
   });
 
   if (!city) return null;
@@ -29,12 +32,10 @@ export const updateCityResources = async (cityId: string) => {
   if (timeDifferenceHours < 0.001) return city; // Moins d'une seconde
 
   // Calculer la production basée sur les bâtiments
-  const production = calculateCityProduction(city.buildings);
-  
   const newResources = {
-    wood: Math.floor(city.wood + (production.wood * timeDifferenceHours)),
-    stone: Math.floor(city.stone + (production.stone * timeDifferenceHours)),
-    silver: Math.floor(city.silver + (production.silver * timeDifferenceHours)),
+    wood: Math.min(999999999, Math.floor(city.wood + (city.woodProduction * timeDifferenceHours))),
+    stone: Math.min(999999999, Math.floor(city.stone + (city.stoneProduction * timeDifferenceHours))),
+    silver: Math.min(999999999, Math.floor(city.silver + (city.silverProduction * timeDifferenceHours))),
   };
 
   // Mettre à jour la cité
@@ -44,32 +45,11 @@ export const updateCityResources = async (cityId: string) => {
       ...newResources,
       lastResourceUpdate: now,
     },
-    include: { buildings: true, units: true }
-  });
-};
-
-// Calculer la production d'une cité
-const calculateCityProduction = (buildings: any[]) => {
-  let production = { wood: 0, stone: 0, silver: 0, population: 0 };
-
-  buildings.forEach(building => {
-    switch (building.type) {
-      case 'timber_camp':
-        production.wood += Math.floor(100 * Math.pow(1.2, building.level - 1));
-        break;
-      case 'quarry':
-        production.stone += Math.floor(80 * Math.pow(1.2, building.level - 1));
-        break;
-      case 'silver_mine':
-        production.silver += Math.floor(50 * Math.pow(1.2, building.level - 1));
-        break;
-      case 'farm':
-        production.population += Math.floor(50 * Math.pow(1.1, building.level - 1));
-        break;
+    include: { 
+      buildings: true, 
+      units: true // Inclure les unités
     }
   });
-
-  return production;
 };
 
 // Fonction pour créer la première cité d'un utilisateur
@@ -91,6 +71,11 @@ export const createUserFirstCity = async (userId: string, cityName: string) => {
       silver: 800,
       population: 150,
       populationUsed: 0,
+      // Production de base (sera recalculée quand des bâtiments seront ajoutés)
+      woodProduction: 100,
+      stoneProduction: 80,
+      silverProduction: 50,
+      populationCapacity: 150,
     },
   });
 

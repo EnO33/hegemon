@@ -1,6 +1,4 @@
-// src/types/database.ts - Types pour les données de la base de données
-// Utilisation des types Prisma générés
-
+// src/types/database.ts (version corrigée)
 import type { Prisma } from '@prisma/client';
 
 // Types basés sur Prisma - synchronisés automatiquement avec le schéma
@@ -28,6 +26,17 @@ export type DbBuilding = Prisma.BuildingGetPayload<{}>;
 export type DbUnit = Prisma.UnitGetPayload<{}>;
 
 export type DbGameProfile = Prisma.GameProfileGetPayload<{}>;
+
+export type DbBuildingQueue = Prisma.BuildingQueueGetPayload<{}>;
+
+// Type pour les cités sans unités (pour la compatibilité)
+export type DbCityBasic = Prisma.CityGetPayload<{
+  include: {
+    buildings: true;
+  };
+}> & {
+  units?: DbUnit[];
+};
 
 // Types pour les réponses d'API
 export interface UserDataResponse {

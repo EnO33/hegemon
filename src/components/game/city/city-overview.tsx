@@ -1,4 +1,4 @@
-// src/components/game/city/city-overview.tsx
+// src/components/game/city/city-overview.tsx (version mise à jour)
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -17,10 +17,13 @@ import {
   Crown,
   Plus,
   Loader2,
-  MapPin
+  MapPin,
+  ArrowRight,
+  Settings
 } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
 import type { UserDataResponse } from '@/types/database';
+import Link from 'next/link';
 
 export const CityOverview = () => {
   const [userData, setUserData] = useState<UserDataResponse | null>(null);
@@ -57,7 +60,7 @@ export const CityOverview = () => {
       });
       
       if (result.success) {
-        await loadUserData(); // Recharger les données
+        await loadUserData();
       } else {
         setError(result.error || 'Erreur de création');
       }
@@ -103,7 +106,6 @@ export const CityOverview = () => {
   }
 
   const { user, gameProfile, cities } = userData;
-  const mainCity = cities.find(city => city.isCapital) || cities[0];
 
   return (
     <div className="space-y-6">
@@ -178,7 +180,7 @@ export const CityOverview = () => {
         </Card>
       </div>
 
-      {/* Liste des cités */}
+      {/* Liste des cités avec liens de gestion */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {cities.map((city) => (
           <Card key={city.id} className={city.isCapital ? 'ring-2 ring-amber-400' : ''}>
@@ -242,16 +244,30 @@ export const CityOverview = () => {
                   Bâtiments ({city.buildings.length})
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  {city.buildings.map((building) => (
+                  {city.buildings.slice(0, 4).map((building) => (
                     <Badge key={building.id} variant="outline" className="text-xs">
                       {building.type} Niv.{building.level}
                     </Badge>
                   ))}
+                  {city.buildings.length > 4 && (
+                    <Badge variant="outline" className="text-xs">
+                      +{city.buildings.length - 4} autres
+                    </Badge>
+                  )}
                   {city.buildings.length === 0 && (
                     <span className="text-sm text-gray-500">Aucun bâtiment</span>
                   )}
                 </div>
               </div>
+
+              {/* Bouton de gestion */}
+              <Button asChild className="w-full mt-4">
+                <Link href={`/city/${city.id}`} className="flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  Gérer cette cité
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         ))}
@@ -262,7 +278,7 @@ export const CityOverview = () => {
         <CardHeader>
           <CardTitle>Actions disponibles</CardTitle>
           <CardDescription>
-            Testez les fonctionnalités de la base de données
+            Testez les fonctionnalités de construction et de gestion
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
