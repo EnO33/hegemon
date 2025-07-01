@@ -164,7 +164,7 @@ export const CityOverview = () => {
               </div>
               
               <p className="text-gray-600 dark:text-gray-300 mb-4">
-                Dirigeant de {cities.length} cité{cities.length > 1 ? 's' : ''} • Membre depuis {new Date(user.createdAt).toLocaleDateString()}
+                Dirigeant de {cities.length} cité{cities.length > 1 ? 's' : ''}
               </p>
               
               {gameProfile && (
