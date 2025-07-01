@@ -1,4 +1,4 @@
-// src/actions/building/build-building.ts (version avec queue améliorée)
+// src/actions/building/build-building.ts (version file d'attente séquentielle)
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
@@ -13,7 +13,7 @@ const buildBuildingSchema = z.object({
   cityId: z.string().uuid(),
 });
 
-// Configuration : nombre maximum de constructions simultanées
+// Configuration : nombre maximum de constructions en queue
 const MAX_BUILDING_QUEUE = 2;
 
 export async function buildBuilding(data: unknown) {
@@ -46,7 +46,10 @@ export async function buildBuilding(data: unknown) {
         buildings: true,
         buildingQueue: {
           where: {
-            status: 'in_progress'
+            status: { in: ['in_progress', 'pending'] }
+          },
+          orderBy: {
+            startedAt: 'asc'
           }
         }
       },
@@ -65,12 +68,12 @@ export async function buildBuilding(data: unknown) {
     // Vérifier qu'il n'y a pas déjà une construction/amélioration de ce type en cours
     const existingQueueForType = city.buildingQueue.find(q => q.buildingType === buildingType);
     if (existingQueueForType) {
-      throw new Error('Une construction/amélioration de ce bâtiment est déjà en cours');
+      throw new Error('Une construction/amélioration de ce bâtiment est déjà en queue');
     }
 
-    // Vérifier le nombre de constructions simultanées
+    // Vérifier le nombre de constructions en queue
     if (city.buildingQueue.length >= MAX_BUILDING_QUEUE) {
-      throw new Error(`Maximum ${MAX_BUILDING_QUEUE} constructions simultanées autorisées`);
+      throw new Error(`Maximum ${MAX_BUILDING_QUEUE} constructions en queue autorisées`);
     }
 
     // Récupérer la configuration du bâtiment
@@ -97,11 +100,23 @@ export async function buildBuilding(data: unknown) {
     }
 
     const now = new Date();
-    const completesAt = new Date(now.getTime() + constructionTime * 1000);
+    
+    // Calculer quand cette construction peut commencer
+    let startTime = now;
+    let status = 'in_progress';
+    
+    // Si il y a déjà une construction en cours, cette nouvelle construction doit attendre
+    const activeConstruction = city.buildingQueue.find(q => q.status === 'in_progress');
+    if (activeConstruction) {
+      startTime = new Date(activeConstruction.completesAt);
+      status = 'pending';
+    }
+    
+    const completesAt = new Date(startTime.getTime() + constructionTime * 1000);
 
     // Transaction pour créer la queue et déduire les ressources
     const result = await db.$transaction(async (tx) => {
-      // Déduire les ressources
+      // Déduire les ressources immédiatement
       await tx.city.update({
         where: { id: cityId },
         data: {
@@ -122,9 +137,9 @@ export async function buildBuilding(data: unknown) {
           stoneCost: cost.stone,
           silverCost: cost.silver,
           duration: constructionTime,
-          startedAt: now,
+          startedAt: startTime,
           completesAt,
-          status: 'in_progress',
+          status,
         },
       });
 
@@ -136,12 +151,14 @@ export async function buildBuilding(data: unknown) {
     revalidatePath(`/city/${cityId}`);
 
     const queuePosition = city.buildingQueue.length + 1;
-    const positionText = queuePosition === 1 ? '' : ` (Position ${queuePosition} dans la queue)`;
+    const statusText = status === 'pending' ? 
+      ` (Position ${queuePosition} - démarrera quand la construction précédente sera terminée)` : 
+      ` (Construction démarrée immédiatement)`;
 
     return {
       success: true,
       data: result,
-      message: `Construction de ${buildingConfig.name} commencée !${positionText}`,
+      message: `Construction de ${buildingConfig.name} ajoutée à la queue !${statusText}`,
     };
 
   } catch (error) {
@@ -188,7 +205,10 @@ export async function upgradeBuilding(data: unknown) {
         buildings: true,
         buildingQueue: {
           where: {
-            status: 'in_progress'
+            status: { in: ['in_progress', 'pending'] }
+          },
+          orderBy: {
+            startedAt: 'asc'
           }
         }
       },
@@ -208,12 +228,12 @@ export async function upgradeBuilding(data: unknown) {
       q.buildingType === building.type && q.action === 'upgrade'
     );
     if (existingQueueForType) {
-      throw new Error('Une amélioration de ce bâtiment est déjà en cours');
+      throw new Error('Une amélioration de ce bâtiment est déjà en queue');
     }
 
-    // Vérifier le nombre de constructions simultanées
+    // Vérifier le nombre de constructions en queue
     if (city.buildingQueue.length >= MAX_BUILDING_QUEUE) {
-      throw new Error(`Maximum ${MAX_BUILDING_QUEUE} constructions simultanées autorisées`);
+      throw new Error(`Maximum ${MAX_BUILDING_QUEUE} constructions en queue autorisées`);
     }
 
     // Récupérer la configuration du bâtiment
@@ -238,11 +258,23 @@ export async function upgradeBuilding(data: unknown) {
     }
 
     const now = new Date();
-    const completesAt = new Date(now.getTime() + constructionTime * 1000);
+    
+    // Calculer quand cette amélioration peut commencer
+    let startTime = now;
+    let status = 'in_progress';
+    
+    // Si il y a déjà une construction en cours, cette amélioration doit attendre
+    const activeConstruction = city.buildingQueue.find(q => q.status === 'in_progress');
+    if (activeConstruction) {
+      startTime = new Date(activeConstruction.completesAt);
+      status = 'pending';
+    }
+    
+    const completesAt = new Date(startTime.getTime() + constructionTime * 1000);
 
     // Transaction
     const result = await db.$transaction(async (tx) => {
-      // Déduire les ressources
+      // Déduire les ressources immédiatement
       await tx.city.update({
         where: { id: cityId },
         data: {
@@ -263,9 +295,9 @@ export async function upgradeBuilding(data: unknown) {
           stoneCost: cost.stone,
           silverCost: cost.silver,
           duration: constructionTime,
-          startedAt: now,
+          startedAt: startTime,
           completesAt,
-          status: 'in_progress',
+          status,
         },
       });
 
@@ -276,12 +308,14 @@ export async function upgradeBuilding(data: unknown) {
     revalidatePath(`/city/${cityId}`);
 
     const queuePosition = city.buildingQueue.length + 1;
-    const positionText = queuePosition === 1 ? '' : ` (Position ${queuePosition} dans la queue)`;
+    const statusText = status === 'pending' ? 
+      ` (Position ${queuePosition} - démarrera quand la construction précédente sera terminée)` : 
+      ` (Amélioration démarrée immédiatement)`;
 
     return {
       success: true,
       data: result,
-      message: `Amélioration de ${buildingConfig.name} vers le niveau ${nextLevel} commencée !${positionText}`,
+      message: `Amélioration de ${buildingConfig.name} vers le niveau ${nextLevel} ajoutée à la queue !${statusText}`,
     };
 
   } catch (error) {

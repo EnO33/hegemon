@@ -1,11 +1,11 @@
-// src/components/game/buildings/building-queue-status.tsx
+// src/components/game/buildings/building-queue-status.tsx (version séquentielle)
 'use client';
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Clock, Hammer, CheckCircle, Plus } from 'lucide-react';
+import { Clock, Hammer, CheckCircle, Plus, Pause, Play } from 'lucide-react';
 import { getBuildingConfig } from '@/lib/constants/buildings';
 import { formatTime } from '@/lib/utils';
 
@@ -15,7 +15,9 @@ interface BuildingQueueItem {
   action: 'build' | 'upgrade';
   targetLevel: number;
   completesAt: string;
+  startedAt: string;
   duration: number;
+  status: 'in_progress' | 'pending' | 'completed';
 }
 
 interface BuildingQueueStatusProps {
@@ -46,10 +48,11 @@ export const BuildingQueueStatus = ({ cityId }: BuildingQueueStatusProps) => {
         if (response.ok) {
           const result = await response.json();
           if (result.success) {
-            // Filtrer par cityId et trier par date de fin
+            // Filtrer par cityId et trier par ordre de démarrage
             const cityQueue = result.data
               .filter((item: any) => item.cityId === cityId)
-              .sort((a: any, b: any) => new Date(a.completesAt).getTime() - new Date(b.completesAt).getTime());
+              .filter((item: any) => item.status !== 'completed')
+              .sort((a: any, b: any) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
             setQueue(cityQueue);
           }
         }
@@ -62,8 +65,8 @@ export const BuildingQueueStatus = ({ cityId }: BuildingQueueStatusProps) => {
 
     loadQueue();
     
-    // Recharger toutes les 30 secondes
-    const interval = setInterval(loadQueue, 30000);
+    // Recharger toutes les 15 secondes (plus fréquent pour voir les changements de statut)
+    const interval = setInterval(loadQueue, 15000);
     return () => clearInterval(interval);
   }, [cityId]);
 
@@ -88,10 +91,10 @@ export const BuildingQueueStatus = ({ cityId }: BuildingQueueStatusProps) => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Hammer className="w-5 h-5" />
-          Queue de construction
+          File de construction
         </CardTitle>
         <CardDescription>
-          {queue.length}/{MAX_QUEUE_SLOTS} emplacements utilisés
+          {queue.length}/{MAX_QUEUE_SLOTS} emplacements • Construction séquentielle
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -112,7 +115,7 @@ export const BuildingQueueStatus = ({ cityId }: BuildingQueueStatusProps) => {
         {queue.length > 0 && (
           <div className="pt-2 border-t">
             <p className="text-xs text-gray-500 text-center">
-              Les constructions se terminent automatiquement
+              ⚡ Les constructions démarrent automatiquement quand la précédente se termine
             </p>
           </div>
         )}
@@ -133,17 +136,60 @@ const ActiveQueueSlot = ({
 }) => {
   const config = getBuildingConfig(item.buildingType as any);
   const completesAt = new Date(item.completesAt).getTime();
-  const timeLeft = Math.max(0, completesAt - currentTime);
-  const progress = Math.max(0, Math.min(100, 
-    ((item.duration * 1000 - timeLeft) / (item.duration * 1000)) * 100
-  ));
-  const isCompleted = timeLeft <= 0;
+  const startedAt = new Date(item.startedAt).getTime();
+  
+  // Calculer le temps restant et le progrès
+  let timeLeft = 0;
+  let progress = 0;
+  let isCompleted = false;
+  
+  if (item.status === 'in_progress') {
+    timeLeft = Math.max(0, completesAt - currentTime);
+    progress = Math.max(0, Math.min(100, 
+      ((item.duration * 1000 - timeLeft) / (item.duration * 1000)) * 100
+    ));
+    isCompleted = timeLeft <= 0;
+  } else if (item.status === 'pending') {
+    // Pour les constructions en attente, afficher le temps total
+    timeLeft = item.duration * 1000;
+    progress = 0;
+  }
+
+  // Déterminer le badge de statut
+  const getStatusBadge = () => {
+    if (isCompleted) {
+      return (
+        <Badge variant="outline" className="text-green-600 text-xs">
+          <CheckCircle className="w-3 h-3 mr-1" />
+          Terminé
+        </Badge>
+      );
+    }
+    
+    if (item.status === 'in_progress') {
+      return (
+        <Badge variant="default" className="text-xs">
+          <Play className="w-3 h-3 mr-1" />
+          En cours
+        </Badge>
+      );
+    }
+    
+    if (item.status === 'pending') {
+      return (
+        <Badge variant="secondary" className="text-xs">
+          <Pause className="w-3 h-3 mr-1" />
+          En attente
+        </Badge>
+      );
+    }
+  };
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Badge variant={position === 1 ? "default" : "secondary"} className="text-xs">
+          <Badge variant="outline" className="text-xs">
             #{position}
           </Badge>
           <span className="font-medium text-sm">
@@ -156,24 +202,37 @@ const ActiveQueueSlot = ({
           )}
         </div>
         
-        {isCompleted ? (
-          <Badge variant="outline" className="text-green-600 text-xs">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Terminé
-          </Badge>
-        ) : (
-          <div className="flex items-center gap-1 text-xs text-gray-600">
-            <Clock className="w-3 h-3" />
-            {formatTime(Math.floor(timeLeft / 1000))}
-          </div>
-        )}
+        {getStatusBadge()}
       </div>
       
       <div className="space-y-1">
-        <Progress value={progress} className="h-1.5" />
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-gray-600">
+            {item.action === 'build' ? 'Construction' : 'Amélioration'}
+          </span>
+          {item.status === 'in_progress' && !isCompleted && (
+            <div className="flex items-center gap-1 text-gray-600">
+              <Clock className="w-3 h-3" />
+              {formatTime(Math.floor(timeLeft / 1000))}
+            </div>
+          )}
+          {item.status === 'pending' && (
+            <div className="flex items-center gap-1 text-amber-600">
+              <Clock className="w-3 h-3" />
+              {formatTime(Math.floor(timeLeft / 1000))} (durée)
+            </div>
+          )}
+        </div>
+        
+        <Progress 
+          value={progress} 
+          className={`h-1.5 ${item.status === 'pending' ? 'opacity-50' : ''}`} 
+        />
+        
         <div className="flex justify-between text-xs text-gray-500">
           <span>
-            {item.action === 'build' ? 'Construction' : 'Amélioration'}
+            {item.status === 'pending' ? 'Attend la construction précédente' : 
+             item.status === 'in_progress' ? 'Construction active' : 'Terminé'}
           </span>
           <span>{Math.round(progress)}%</span>
         </div>

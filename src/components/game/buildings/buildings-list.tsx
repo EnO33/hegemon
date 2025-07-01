@@ -18,7 +18,9 @@ async function getBuildingQueue(cityId: string) {
     if (response.ok) {
       const result = await response.json();
       if (result.success) {
-        return result.data.filter((item: any) => item.cityId === cityId);
+        return result.data
+          .filter((item: any) => item.cityId === cityId)
+          .filter((item: any) => item.status === 'in_progress' || item.status === 'pending');
       }
     }
   } catch (error) {

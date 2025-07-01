@@ -25,7 +25,7 @@ export async function GET() {
         city: {
           userId: user.id,
         },
-        status: 'in_progress',
+        status: { in: ['in_progress', 'pending'] },
       },
       include: {
         city: {
@@ -36,7 +36,7 @@ export async function GET() {
         },
       },
       orderBy: {
-        completesAt: 'asc',
+        startedAt: 'asc',
       },
     });
 

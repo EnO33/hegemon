@@ -1,4 +1,4 @@
-// src/app/api/game/tick/route.ts
+// src/app/api/game/tick/route.ts (version avec file d'attente séquentielle)
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getBuildingConfig } from '@/lib/constants/buildings';
@@ -19,6 +19,7 @@ export async function POST() {
 
     console.log(`Finalisation de ${completedBuildings.length} constructions`);
 
+    // Traiter chaque construction terminée
     for (const buildingQueue of completedBuildings) {
       await db.$transaction(async (tx) => {
         if (buildingQueue.action === 'build') {
@@ -51,6 +52,9 @@ export async function POST() {
 
         // Mettre à jour la production de la cité
         await updateCityProductionInTransaction(buildingQueue.cityId, tx);
+
+        // 🆕 NOUVEAU : Démarrer la construction suivante en attente pour cette cité
+        await startNextQueuedBuilding(buildingQueue.cityId, tx);
       });
     }
 
@@ -109,6 +113,37 @@ export async function POST() {
       },
       { status: 500 }
     );
+  }
+}
+
+// 🆕 NOUVELLE FONCTION : Démarrer la construction suivante en attente
+async function startNextQueuedBuilding(cityId: string, tx: any) {
+  // Trouver la prochaine construction en attente pour cette cité
+  const nextBuilding = await tx.buildingQueue.findFirst({
+    where: {
+      cityId,
+      status: 'pending'
+    },
+    orderBy: {
+      startedAt: 'asc' // Le plus ancien en premier
+    }
+  });
+
+  if (nextBuilding) {
+    const now = new Date();
+    const newCompletesAt = new Date(now.getTime() + nextBuilding.duration * 1000);
+    
+    // Démarrer cette construction
+    await tx.buildingQueue.update({
+      where: { id: nextBuilding.id },
+      data: {
+        status: 'in_progress',
+        startedAt: now,
+        completesAt: newCompletesAt,
+      },
+    });
+
+    console.log(`Construction suivante démarrée: ${nextBuilding.buildingType} dans la cité ${cityId}`);
   }
 }
 

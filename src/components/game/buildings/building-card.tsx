@@ -16,7 +16,7 @@ import toast from 'react-hot-toast';
 interface BuildingCardProps {
   buildingType: BuildingType;
   existingBuilding?: DbBuilding;
-  city: DbCity & { buildingQueue?: Array<{ status: string; buildingType: string }> };
+  city: DbCity & { buildingQueue?: Array<{ status: string; buildingType: string; action: string }> };
   onAction?: () => void;
 }
 
@@ -36,7 +36,7 @@ export const BuildingCard = ({ buildingType, existingBuilding, city, onAction }:
                    city.silver >= cost.silver;
 
   // Vérifier l'état de la queue
-  const currentQueue = city.buildingQueue?.filter(q => q.status === 'in_progress') || [];
+  const currentQueue = city.buildingQueue?.filter(q => q.status === 'in_progress' || q.status === 'pending') || [];
   const isInQueue = currentQueue.some(q => q.buildingType === buildingType);
   const queueFull = currentQueue.length >= 2;
 
@@ -208,12 +208,27 @@ export const BuildingCard = ({ buildingType, existingBuilding, city, onAction }:
         {/* Statut si en queue */}
         {isInQueue && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="flex items-center gap-2 text-blue-700 text-sm">
-              <Clock className="w-4 h-4" />
-              {existingBuilding ? 'Amélioration en cours' : 'Construction en cours'}
-            </div>
+            {(() => {
+              const queueItem = currentQueue.find(q => q.buildingType === buildingType);
+              const isActive = queueItem?.status === 'in_progress';
+              const isPending = queueItem?.status === 'pending';
+              
+              return (
+                <div className="flex items-center gap-2 text-blue-700 text-sm">
+                  <Clock className="w-4 h-4" />
+                  {isActive && (existingBuilding ? 'Amélioration en cours' : 'Construction en cours')}
+                  {isPending && (existingBuilding ? 'Amélioration en attente' : 'Construction en attente')}
+                </div>
+              );
+            })()}
             <p className="text-blue-600 text-xs mt-1">
-              Visible dans la queue de construction
+              {(() => {
+                const queueItem = currentQueue.find(q => q.buildingType === buildingType);
+                if (queueItem?.status === 'pending') {
+                  return 'Démarrera quand la construction précédente sera terminée';
+                }
+                return 'Visible dans la file de construction';
+              })()}
             </p>
           </div>
         )}
