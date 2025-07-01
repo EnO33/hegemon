@@ -1,13 +1,42 @@
-// src/components/game/buildings/buildings-list.tsx
+// src/components/game/buildings/buildings-list.tsx (version corrigée)
 'use client';
 
+import { useState, useEffect } from 'react';
 import { BuildingCard } from './building-card';
 import { BUILDING_CONFIGS } from '@/lib/constants/buildings';
-import { useCityBuildings } from '@/stores/city-store';
+import { getUserCity } from '@/actions/user/get-user-data';
+import { useParams } from 'next/navigation';
 import type { BuildingType } from '@/types';
+import type { DbBuilding, DbCity } from '@/types/database';
+import { Card, CardContent } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 
 export const BuildingsList = () => {
-  const buildings = useCityBuildings();
+  const params = useParams();
+  const cityId = params.cityId as string;
+  
+  const [city, setCity] = useState<DbCity | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Charger les données de la cité
+  useEffect(() => {
+    const loadCityData = async () => {
+      if (!cityId) return;
+      
+      try {
+        const result = await getUserCity(cityId);
+        if (result.success && result.data) {
+          setCity(result.data);
+        }
+      } catch (error) {
+        console.error('Erreur chargement cité:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadCityData();
+  }, [cityId]);
 
   const getBuildingsByCategory = () => {
     const categories = {
@@ -26,6 +55,35 @@ export const BuildingsList = () => {
     return categories;
   };
 
+  // Fonction pour recharger après une action
+  const handleBuildingAction = async () => {
+    const result = await getUserCity(cityId);
+    if (result.success && result.data) {
+      setCity(result.data);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-amber-600" />
+          <p className="text-gray-600">Chargement des bâtiments...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!city) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <p className="text-red-600">Erreur de chargement des bâtiments</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const categorizedBuildings = getBuildingsByCategory();
 
   return (
@@ -41,12 +99,14 @@ export const BuildingsList = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {buildingTypes.map(buildingType => {
-              const existingBuilding = buildings.find(b => b.type === buildingType);
+              const existingBuilding = city.buildings.find(b => b.type === buildingType);
               return (
                 <BuildingCard
                   key={buildingType}
                   buildingType={buildingType}
                   existingBuilding={existingBuilding}
+                  city={city}
+                  onAction={handleBuildingAction}
                 />
               );
             })}

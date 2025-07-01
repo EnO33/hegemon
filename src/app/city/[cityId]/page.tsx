@@ -1,7 +1,7 @@
-// src/app/city/[cityId]/page.tsx (mise à jour avec queue)
+// src/app/city/[cityId]/page.tsx (version corrigée)
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useUser, UserButton } from '@clerk/nextjs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,9 +20,9 @@ import {
   BarChart3,
   Hammer
 } from 'lucide-react';
-import { useCityStore, useCityResources, useCityProduction, useCityLoading, useCityError } from '@/stores/city-store';
-import { useResourceUpdater } from '@/hooks/use-resource-updater';
+import { getUserCity } from '@/actions/user/get-user-data';
 import { formatNumber } from '@/lib/utils';
+import type { DbCity } from '@/types/database';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -30,73 +30,109 @@ export default function CityManagementPage() {
   const params = useParams();
   const cityId = params.cityId as string;
   const { user, isLoaded } = useUser();
+  
+  // État local simplifié
+  const [city, setCity] = useState<DbCity | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'buildings' | 'units' | 'research'>('overview');
 
-  const { currentCity, actions } = useCityStore();
-  const resources = useCityResources();
-  const production = useCityProduction();
-  const isLoading = useCityLoading();
-  const error = useCityError();
-
-  // Hook pour la mise à jour automatique des ressources
-  useResourceUpdater(cityId);
-
-  useEffect(() => {
-    if (cityId) {
-      actions.loadCity(cityId);
+  // Fonction de chargement de la cité
+  const loadCity = useCallback(async () => {
+    if (!cityId) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const result = await getUserCity(cityId);
+      
+      if (result.success && result.data) {
+        setCity(result.data);
+      } else {
+        setError(result.error || 'Erreur de chargement');
+      }
+    } catch (err) {
+      setError('Erreur de connexion');
+    } finally {
+      setIsLoading(false);
     }
+  }, [cityId]);
 
-    return () => {
-      actions.reset();
-    };
-  }, [cityId, actions]);
-
-  // Notifications de construction
+  // Charger la cité au montage
   useEffect(() => {
-    // Simuler des notifications de construction terminée
-    const checkCompletedBuildings = async () => {
+    loadCity();
+  }, [loadCity]);
+
+  // Mise à jour des ressources en temps réel (simplifiée)
+  useEffect(() => {
+    if (!city) return;
+
+    const updateResources = () => {
+      setCity(prevCity => {
+        if (!prevCity) return null;
+        
+        const now = Date.now();
+        const lastUpdate = new Date(prevCity.lastResourceUpdate).getTime();
+        const timeDiffHours = (now - lastUpdate) / (1000 * 60 * 60);
+
+        if (timeDiffHours < 0.0003) return prevCity; // Moins d'une seconde
+
+        return {
+          ...prevCity,
+          wood: Math.min(999999999, Math.floor(prevCity.wood + (prevCity.woodProduction * timeDiffHours))),
+          stone: Math.min(999999999, Math.floor(prevCity.stone + (prevCity.stoneProduction * timeDiffHours))),
+          silver: Math.min(999999999, Math.floor(prevCity.silver + (prevCity.silverProduction * timeDiffHours))),
+          lastResourceUpdate: new Date(),
+        };
+      });
+    };
+
+    // Mettre à jour toutes les 5 secondes (moins fréquent)
+    const interval = setInterval(updateResources, 5000);
+    return () => clearInterval(interval);
+  }, [city?.id]); // Dépendance sur l'ID uniquement
+
+  // Synchronisation serveur (moins fréquente)
+  useEffect(() => {
+    if (!cityId) return;
+
+    const syncInterval = setInterval(() => {
+      loadCity();
+    }, 2 * 60 * 1000); // 2 minutes
+
+    return () => clearInterval(syncInterval);
+  }, [cityId, loadCity]);
+
+  // Vérification des constructions terminées
+  useEffect(() => {
+    const checkBuildings = async () => {
       try {
         const response = await fetch('/api/game/tick', { method: 'POST' });
         if (response.ok) {
           const result = await response.json();
-          if (result.processed.buildings > 0) {
+          if (result.processed?.buildings > 0) {
             toast.success(`${result.processed.buildings} construction(s) terminée(s) !`);
-            // Recharger la cité pour voir les nouveaux bâtiments
-            actions.refreshCity();
+            loadCity(); // Recharger après construction
           }
         }
       } catch (error) {
-        console.error('Erreur lors de la vérification des constructions:', error);
+        console.error('Erreur tick:', error);
       }
     };
 
-    // Vérifier toutes les 2 minutes
-    const interval = setInterval(checkCompletedBuildings, 2 * 60 * 1000);
+    // Vérifier toutes les 3 minutes
+    const interval = setInterval(checkBuildings, 3 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [actions]);
+  }, [loadCity]);
 
-  if (!isLoaded) {
+  // États de chargement et d'erreur
+  if (!isLoaded || isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 bg-gradient-to-br from-amber-600 to-red-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
             <Castle className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-gray-600 flex items-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Chargement...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading && !currentCity) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-amber-600 to-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Castle className="w-8 h-8 text-white animate-pulse" />
           </div>
           <p className="text-gray-600 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -116,7 +152,7 @@ export default function CityManagementPage() {
             <h2 className="text-xl font-semibold mb-2">Erreur</h2>
             <p className="text-gray-600 mb-4">{error}</p>
             <div className="space-x-2">
-              <Button onClick={() => actions.loadCity(cityId)} variant="outline">
+              <Button onClick={loadCity} variant="outline">
                 Réessayer
               </Button>
               <Button asChild>
@@ -129,7 +165,7 @@ export default function CityManagementPage() {
     );
   }
 
-  if (!currentCity) {
+  if (!city) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center">
         <Card className="max-w-md mx-auto">
@@ -167,14 +203,14 @@ export default function CityManagementPage() {
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                    {currentCity.name}
-                    {currentCity.isCapital && (
+                    {city.name}
+                    {city.isCapital && (
                       <Crown className="w-5 h-5 text-yellow-600" />
                     )}
                   </h1>
                   <p className="text-sm text-gray-600 flex items-center gap-1">
                     <MapPin className="w-3 h-3" />
-                    ({currentCity.x}, {currentCity.y}) • {formatNumber(currentCity.points)} points
+                    ({city.x}, {city.y}) • {formatNumber(city.points)} points
                   </p>
                 </div>
               </div>
@@ -187,7 +223,6 @@ export default function CityManagementPage() {
                 {user?.username}
               </Badge>
               <UserButton 
-                afterSignOutUrl="/"
                 appearance={{
                   elements: {
                     avatarBox: "w-10 h-10"
@@ -199,11 +234,21 @@ export default function CityManagementPage() {
         </div>
       </header>
 
-      {/* Ressources en temps réel */}
+      {/* Ressources */}
       <div className="container mx-auto px-4 py-4">
         <ResourceDisplay 
-          resources={resources} 
-          production={production}
+          resources={{
+            wood: city.wood,
+            stone: city.stone,
+            silver: city.silver,
+            population: city.population,
+            populationUsed: city.populationUsed,
+          }} 
+          production={{
+            woodProduction: city.woodProduction,
+            stoneProduction: city.stoneProduction,
+            silverProduction: city.silverProduction,
+          }}
         />
       </div>
 
@@ -239,7 +284,7 @@ export default function CityManagementPage() {
         <div className="bg-white rounded-b-lg min-h-[600px]">
           {activeTab === 'overview' && (
             <div className="p-6 space-y-6">
-              <h2 className="text-2xl font-bold">Vue d'ensemble de {currentCity.name}</h2>
+              <h2 className="text-2xl font-bold">Vue d'ensemble de {city.name}</h2>
               
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Informations générales */}
@@ -251,19 +296,19 @@ export default function CityManagementPage() {
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <span className="text-gray-600">Position:</span>
-                        <div className="font-medium">({currentCity.x}, {currentCity.y})</div>
+                        <div className="font-medium">({city.x}, {city.y})</div>
                       </div>
                       <div>
                         <span className="text-gray-600">Points:</span>
-                        <div className="font-medium">{formatNumber(currentCity.points)}</div>
+                        <div className="font-medium">{formatNumber(city.points)}</div>
                       </div>
                       <div>
                         <span className="text-gray-600">Bâtiments:</span>
-                        <div className="font-medium">{currentCity.buildings.length}</div>
+                        <div className="font-medium">{city.buildings.length}</div>
                       </div>
                       <div>
                         <span className="text-gray-600">Unités:</span>
-                        <div className="font-medium">{currentCity.units.length}</div>
+                        <div className="font-medium">{city.units?.length || 0}</div>
                       </div>
                     </div>
                   </CardContent>
@@ -278,15 +323,15 @@ export default function CityManagementPage() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-green-600">🌲 Bois</span>
-                        <span className="font-bold">+{production.woodProduction}/h</span>
+                        <span className="font-bold">+{city.woodProduction}/h</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-gray-600">🗻 Pierre</span>
-                        <span className="font-bold">+{production.stoneProduction}/h</span>
+                        <span className="font-bold">+{city.stoneProduction}/h</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-yellow-600">🪙 Argent</span>
-                        <span className="font-bold">+{production.silverProduction}/h</span>
+                        <span className="font-bold">+{city.silverProduction}/h</span>
                       </div>
                     </div>
                   </CardContent>
@@ -303,6 +348,11 @@ export default function CityManagementPage() {
           {activeTab === 'buildings' && (
             <div className="p-6">
               <h2 className="text-2xl font-bold mb-6">Gestion des bâtiments</h2>
+              <div className="mb-4">
+                <Button onClick={loadCity} variant="outline" size="sm">
+                  Actualiser
+                </Button>
+              </div>
               <BuildingsList />
             </div>
           )}

@@ -1,4 +1,4 @@
-// src/components/game/buildings/building-card.tsx
+// src/components/game/buildings/building-card.tsx (version corrigée)
 'use client';
 
 import { useState } from 'react';
@@ -8,21 +8,20 @@ import { Badge } from '@/components/ui/badge';
 import { Trees, Mountain, Coins, Clock, Hammer, AlertCircle, CheckCircle } from 'lucide-react';
 import { getBuildingConfig, calculateBuildingCost, calculateConstructionTime } from '@/lib/constants/buildings';
 import { formatNumber, formatTime } from '@/lib/utils';
-import { useCityActions, useCityResources, useCityLoading } from '@/stores/city-store';
+import { buildBuilding, upgradeBuilding } from '@/actions/building/build-building';
 import type { BuildingType } from '@/types';
-import type { DbBuilding } from '@/types/database';
+import type { DbBuilding, DbCity } from '@/types/database';
+import toast from 'react-hot-toast';
 
 interface BuildingCardProps {
   buildingType: BuildingType;
   existingBuilding?: DbBuilding;
+  city: DbCity;
   onAction?: () => void;
 }
 
-export const BuildingCard = ({ buildingType, existingBuilding, onAction }: BuildingCardProps) => {
+export const BuildingCard = ({ buildingType, existingBuilding, city, onAction }: BuildingCardProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const { buildBuilding, upgradeBuilding } = useCityActions();
-  const resources = useCityResources();
-  const isLoading = useCityLoading();
   
   const config = getBuildingConfig(buildingType);
   const currentLevel = existingBuilding?.level || 0;
@@ -32,24 +31,38 @@ export const BuildingCard = ({ buildingType, existingBuilding, onAction }: Build
   const cost = calculateBuildingCost(config, nextLevel);
   const constructionTime = calculateConstructionTime(config, nextLevel);
   
-  const canAfford = resources.wood >= cost.wood && 
-                   resources.stone >= cost.stone && 
-                   resources.silver >= cost.silver;
+  const canAfford = city.wood >= cost.wood && 
+                   city.stone >= cost.stone && 
+                   city.silver >= cost.silver;
 
   const handleAction = async () => {
     setIsProcessing(true);
     try {
-      let success = false;
+      let result;
       
       if (existingBuilding) {
-        success = await upgradeBuilding(existingBuilding.id);
+        result = await upgradeBuilding({
+          buildingId: existingBuilding.id,
+          cityId: city.id,
+        });
       } else {
-        success = await buildBuilding(buildingType);
+        result = await buildBuilding({
+          buildingType,
+          cityId: city.id,
+        });
       }
       
-      if (success && onAction) {
-        onAction();
+      if (result.success) {
+        toast.success(result.message || 'Action réussie !');
+        if (onAction) {
+          // Attendre un peu avant de recharger pour laisser le serveur se mettre à jour
+          setTimeout(onAction, 500);
+        }
+      } else {
+        toast.error(result.error || 'Erreur lors de l\'action');
       }
+    } catch (error) {
+      toast.error('Erreur de connexion');
     } finally {
       setIsProcessing(false);
     }
@@ -57,8 +70,8 @@ export const BuildingCard = ({ buildingType, existingBuilding, onAction }: Build
 
   // Vérifier les prérequis
   const missingRequirements = config.requirements.filter(req => {
-    // Cette logique devrait être améliorée pour vérifier les bâtiments existants
-    return false; // Simplifié pour l'exemple
+    const requiredBuilding = city.buildings.find(b => b.type === req.buildingType);
+    return !requiredBuilding || requiredBuilding.level < req.level;
   });
 
   return (
@@ -93,7 +106,7 @@ export const BuildingCard = ({ buildingType, existingBuilding, onAction }: Build
             </div>
             {missingRequirements.map(req => (
               <div key={req.buildingType} className="text-red-600 text-xs ml-6">
-                {req.buildingType} niveau {req.level}
+                {getBuildingConfig(req.buildingType as BuildingType)?.name || req.buildingType} niveau {req.level}
               </div>
             ))}
           </div>
@@ -108,15 +121,15 @@ export const BuildingCard = ({ buildingType, existingBuilding, onAction }: Build
             </h4>
             
             <div className="grid grid-cols-3 gap-2 text-sm">
-              <div className={`flex items-center gap-1 ${resources.wood < cost.wood ? 'text-red-600' : 'text-green-600'}`}>
+              <div className={`flex items-center gap-1 ${city.wood < cost.wood ? 'text-red-600' : 'text-green-600'}`}>
                 <Trees className="w-3 h-3" />
                 {formatNumber(cost.wood)}
               </div>
-              <div className={`flex items-center gap-1 ${resources.stone < cost.stone ? 'text-red-600' : 'text-green-600'}`}>
+              <div className={`flex items-center gap-1 ${city.stone < cost.stone ? 'text-red-600' : 'text-green-600'}`}>
                 <Mountain className="w-3 h-3" />
                 {formatNumber(cost.stone)}
               </div>
-              <div className={`flex items-center gap-1 ${resources.silver < cost.silver ? 'text-red-600' : 'text-green-600'}`}>
+              <div className={`flex items-center gap-1 ${city.silver < cost.silver ? 'text-red-600' : 'text-green-600'}`}>
                 <Coins className="w-3 h-3" />
                 {formatNumber(cost.silver)}
               </div>
@@ -158,7 +171,7 @@ export const BuildingCard = ({ buildingType, existingBuilding, onAction }: Build
         {!isMaxLevel && (
           <Button 
             onClick={handleAction}
-            disabled={!canAfford || isLoading || isProcessing || missingRequirements.length > 0}
+            disabled={!canAfford || isProcessing || missingRequirements.length > 0}
             className="w-full"
             variant={existingBuilding ? "outline" : "default"}
           >
