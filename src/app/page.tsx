@@ -32,10 +32,10 @@ export default function HomePage() {
           
           <div className="flex items-center gap-3">
             <Button variant="outline" asChild>
-              <Link href="/login">Connexion</Link>
+              <Link href="/sign-in">Connexion</Link>
             </Button>
             <Button asChild>
-              <Link href="/register">
+              <Link href="/sign-up">
                 Commencer à jouer
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Link>
@@ -62,7 +62,7 @@ export default function HomePage() {
           
           <div className="flex items-center justify-center gap-4 mb-12">
             <Button size="lg" asChild>
-              <Link href="/register">
+              <Link href="/sign-up">
                 Créer mon empire
                 <Castle className="w-5 h-5 ml-2" />
               </Link>
@@ -201,7 +201,7 @@ export default function HomePage() {
                 Rejoignez l'aventure dès maintenant et commencez à bâtir votre empire.
               </p>
               <Button size="lg" variant="secondary" asChild>
-                <Link href="/register">
+                <Link href="/sign-up">
                   Créer mon compte
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Link>
