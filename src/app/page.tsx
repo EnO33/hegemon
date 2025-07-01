@@ -1,14 +1,16 @@
 // src/app/page.tsx
-import { Button } from '@/components/ui/button';
+'use client';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { DynamicHeader } from '@/components/layout/dynamic-header';
+import { HeroSection } from '@/components/layout/hero-section';
+import { CTASection } from '@/components/layout/cta-section';
 import { 
   Sword, 
   Castle, 
   Coins, 
   Users, 
   Trophy,
-  ArrowRight,
   Shield,
   Hammer
 } from 'lucide-react';
@@ -17,64 +19,15 @@ import Link from 'next/link';
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-amber-600 to-red-600 rounded-lg flex items-center justify-center">
-              <Castle className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Hegemon</h1>
-              <p className="text-sm text-gray-600">Jeu de stratégie antique</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <Button variant="outline" asChild>
-              <Link href="/sign-in">Connexion</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/sign-up">
-                Commencer à jouer
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </header>
+      {/* Header dynamique */}
+      <DynamicHeader />
 
-      {/* Hero Section */}
-      <section className="container mx-auto px-4 py-16 text-center">
+      {/* Hero Section dynamique */}
+      <HeroSection />
+
+      {/* Stats rapides */}
+      <div className="container mx-auto px-4">
         <div className="max-w-4xl mx-auto">
-          <Badge variant="secondary" className="mb-4">
-            🚀 Phase Alpha - Développement en cours
-          </Badge>
-          
-          <h2 className="text-5xl font-bold text-gray-900 mb-6">
-            Construisez votre empire antique
-          </h2>
-          
-          <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-            Développez vos cités, gérez vos ressources, recrutez des armées et 
-            conquérez le monde méditerranéen dans ce jeu de stratégie en temps réel.
-          </p>
-          
-          <div className="flex items-center justify-center gap-4 mb-12">
-            <Button size="lg" asChild>
-              <Link href="/sign-up">
-                Créer mon empire
-                <Castle className="w-5 h-5 ml-2" />
-              </Link>
-            </Button>
-            <Button variant="outline" size="lg" asChild>
-              <Link href="/demo">
-                Voir la démo
-              </Link>
-            </Button>
-          </div>
-
-          {/* Stats rapides */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
             <Card>
               <CardContent className="p-6 text-center">
@@ -99,7 +52,7 @@ export default function HomePage() {
             </Card>
           </div>
         </div>
-      </section>
+      </div>
 
       {/* Features */}
       <section className="bg-white/50 py-16">
@@ -189,27 +142,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA Final */}
-      <section className="py-16">
-        <div className="container mx-auto px-4 text-center">
-          <Card className="max-w-2xl mx-auto bg-gradient-to-r from-amber-500 to-red-500 text-white border-0">
-            <CardContent className="p-8">
-              <h3 className="text-3xl font-bold mb-4">
-                Prêt à conquérir le monde ?
-              </h3>
-              <p className="text-amber-100 mb-6">
-                Rejoignez l'aventure dès maintenant et commencez à bâtir votre empire.
-              </p>
-              <Button size="lg" variant="secondary" asChild>
-                <Link href="/sign-up">
-                  Créer mon compte
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+      {/* CTA Final (uniquement si non connecté) */}
+      <CTASection />
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-8">

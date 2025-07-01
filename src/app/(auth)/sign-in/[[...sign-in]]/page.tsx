@@ -1,8 +1,8 @@
 // src/app/sign-in/[[...sign-in]]/page.tsx
 'use client';
 
-import { useState } from 'react';
-import { useSignIn } from '@clerk/nextjs';
+import { useState, useEffect } from 'react';
+import { useSignIn, useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -23,8 +23,10 @@ import { cn } from '@/lib/utils';
 
 export default function SignInPage() {
   const { isLoaded, signIn, setActive } = useSignIn();
+  const { user, isLoaded: isUserLoaded } = useUser();
   const router = useRouter();
 
+  // TOUS LES HOOKS DOIVENT ÊTRE DÉCLARÉS EN PREMIER
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -32,6 +34,13 @@ export default function SignInPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Rediriger si déjà connecté
+  useEffect(() => {
+    if (isUserLoaded && user) {
+      router.replace('/city');
+    }
+  }, [isUserLoaded, user, router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -68,6 +77,20 @@ export default function SignInPage() {
       setIsLoading(false);
     }
   };
+
+  // CONDITION DE SORTIE APRÈS TOUS LES HOOKS
+  if (isUserLoaded && user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-amber-600 to-red-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <Castle className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-gray-600">Redirection vers votre empire...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
