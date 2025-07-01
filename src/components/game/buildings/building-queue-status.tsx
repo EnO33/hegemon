@@ -1,13 +1,14 @@
 // src/components/game/buildings/building-queue-status.tsx (version séquentielle)
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Clock, Hammer, CheckCircle, Plus, Pause, Play } from 'lucide-react';
 import { getBuildingConfig } from '@/lib/constants/buildings';
 import { formatTime } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 interface BuildingQueueItem {
   id: string;
@@ -22,14 +23,16 @@ interface BuildingQueueItem {
 
 interface BuildingQueueStatusProps {
   cityId: string;
+  onBuildingCompleted?: () => void;
 }
 
 const MAX_QUEUE_SLOTS = 2;
 
-export const BuildingQueueStatus = ({ cityId }: BuildingQueueStatusProps) => {
+export const BuildingQueueStatus = ({ cityId, onBuildingCompleted }: BuildingQueueStatusProps) => {
   const [queue, setQueue] = useState<BuildingQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [isProcessingTick, setIsProcessingTick] = useState(false);
 
   // Mettre à jour l'heure actuelle toutes les secondes
   useEffect(() => {
@@ -40,35 +43,86 @@ export const BuildingQueueStatus = ({ cityId }: BuildingQueueStatusProps) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Charger la queue de construction
-  useEffect(() => {
-    const loadQueue = async () => {
-      try {
-        const response = await fetch('/api/game/building-queue');
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success) {
-            // Filtrer par cityId et trier par ordre de démarrage
-            const cityQueue = result.data
-              .filter((item: any) => item.cityId === cityId)
-              .filter((item: any) => item.status !== 'completed')
-              .sort((a: any, b: any) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
-            setQueue(cityQueue);
-          }
-        }
-      } catch (error) {
-        console.error('Erreur lors du chargement de la queue:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  
 
+  // Charger la queue de construction
+  const loadQueue = useCallback(async () => {
+    try {
+      const response = await fetch('/api/game/building-queue');
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Filtrer par cityId et trier par ordre de démarrage
+          const cityQueue = result.data
+            .filter((item: any) => item.cityId === cityId)
+            .filter((item: any) => item.status !== 'completed')
+            .sort((a: any, b: any) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
+          setQueue(cityQueue);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement de la queue:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [cityId]);
+
+  // Fonction pour déclencher une vérification optimisée
+  const triggerTick = useCallback(async () => {
+    if (isProcessingTick) return;
+    
+    setIsProcessingTick(true);
+    try {
+      // Utiliser l'endpoint optimisé qui ne vérifie que nos constructions
+      const response = await fetch('/api/game/check-buildings', {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('🔄 Vérification constructions:', result);
+        
+        if (result.hasCompletedBuildings && result.processed?.buildings > 0) {
+          toast.success(`${result.processed.buildings} construction(s) terminée(s) !`);
+          
+          // Recharger la queue après la finalisation
+          setTimeout(() => {
+            loadQueue();
+            if (onBuildingCompleted) {
+              onBuildingCompleted();
+            }
+          }, 500);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification:', error);
+    } finally {
+      setIsProcessingTick(false);
+    }
+  }, [isProcessingTick, onBuildingCompleted, loadQueue]);
+
+  // Détecter les constructions terminées côté client
+  useEffect(() => {
+    const completedBuildings = queue.filter(item => {
+      if (item.status !== 'in_progress') return false;
+      const completesAt = new Date(item.completesAt).getTime();
+      return currentTime >= completesAt;
+    });
+
+    // Si des constructions sont terminées côté client, déclencher un tick
+    if (completedBuildings.length > 0 && !isProcessingTick) {
+      console.log(`🎯 Détection côté client: ${completedBuildings.length} construction(s) terminée(s)`);
+      triggerTick();
+    }
+  }, [currentTime, queue, triggerTick, isProcessingTick]);
+
+  useEffect(() => {
     loadQueue();
     
-    // Recharger toutes les 15 secondes (plus fréquent pour voir les changements de statut)
-    const interval = setInterval(loadQueue, 15000);
+    // Recharger toutes les 30 secondes (comme backup)
+    const interval = setInterval(loadQueue, 30000);
     return () => clearInterval(interval);
-  }, [cityId]);
+  }, [loadQueue]);
 
   if (isLoading) {
     return (
@@ -92,6 +146,9 @@ export const BuildingQueueStatus = ({ cityId }: BuildingQueueStatusProps) => {
         <CardTitle className="flex items-center gap-2">
           <Hammer className="w-5 h-5" />
           File de construction
+          {isProcessingTick && (
+            <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          )}
         </CardTitle>
         <CardDescription>
           {queue.length}/{MAX_QUEUE_SLOTS} emplacements • Construction séquentielle
@@ -117,6 +174,11 @@ export const BuildingQueueStatus = ({ cityId }: BuildingQueueStatusProps) => {
             <p className="text-xs text-gray-500 text-center">
               ⚡ Les constructions démarrent automatiquement quand la précédente se termine
             </p>
+            {isProcessingTick && (
+              <p className="text-xs text-amber-600 text-center mt-1">
+                🔄 Finalisation en cours...
+              </p>
+            )}
           </div>
         )}
       </CardContent>
@@ -159,9 +221,9 @@ const ActiveQueueSlot = ({
   const getStatusBadge = () => {
     if (isCompleted) {
       return (
-        <Badge variant="outline" className="text-green-600 text-xs">
+        <Badge variant="outline" className="text-green-600 text-xs animate-pulse">
           <CheckCircle className="w-3 h-3 mr-1" />
-          Terminé
+          Finalisation...
         </Badge>
       );
     }
@@ -222,16 +284,26 @@ const ActiveQueueSlot = ({
               {formatTime(Math.floor(timeLeft / 1000))} (durée)
             </div>
           )}
+          {isCompleted && (
+            <div className="flex items-center gap-1 text-green-600">
+              <CheckCircle className="w-3 h-3" />
+              Finalisation...
+            </div>
+          )}
         </div>
         
         <Progress 
           value={progress} 
-          className={`h-1.5 ${item.status === 'pending' ? 'opacity-50' : ''}`} 
+          className={`h-1.5 ${
+            item.status === 'pending' ? 'opacity-50' : 
+            isCompleted ? 'bg-green-100' : ''
+          }`} 
         />
         
         <div className="flex justify-between text-xs text-gray-500">
           <span>
-            {item.status === 'pending' ? 'Attend la construction précédente' : 
+            {isCompleted ? 'Finalisation en cours...' :
+             item.status === 'pending' ? 'Attend la construction précédente' : 
              item.status === 'in_progress' ? 'Construction active' : 'Terminé'}
           </span>
           <span>{Math.round(progress)}%</span>
