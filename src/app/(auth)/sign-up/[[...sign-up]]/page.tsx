@@ -1,7 +1,7 @@
 // src/app/sign-up/[[...sign-up]]/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSignUp, useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -28,27 +28,7 @@ export default function SignUpPage() {
   const { user, isLoaded: isUserLoaded } = useUser();
   const router = useRouter();
 
-  // Rediriger si déjà connecté
-  useEffect(() => {
-    if (isUserLoaded && user) {
-      router.replace('/city');
-    }
-  }, [isUserLoaded, user, router]);
-
-  // Ne pas afficher le contenu si l'utilisateur est connecté
-  if (isUserLoaded && user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-amber-600 to-red-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <Castle className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-gray-600">Redirection vers votre empire...</p>
-        </div>
-      </div>
-    );
-  }
-
+  // TOUS LES HOOKS DOIVENT ÊTRE DÉCLARÉS EN PREMIER
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -61,6 +41,13 @@ export default function SignUpPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState('');
+
+  // Rediriger si déjà connecté
+  useEffect(() => {
+    if (isUserLoaded && user) {
+      router.replace('/city');
+    }
+  }, [isUserLoaded, user, router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -155,6 +142,20 @@ export default function SignUpPage() {
       setIsLoading(false);
     }
   };
+
+  // CONDITION DE SORTIE APRÈS TOUS LES HOOKS
+  if (isUserLoaded && user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-amber-600 to-red-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <Castle className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-gray-600">Redirection vers votre empire...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (pendingVerification) {
     return (
