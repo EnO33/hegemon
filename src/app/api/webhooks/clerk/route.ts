@@ -1,4 +1,4 @@
-// src/app/api/webhooks/clerk/route.ts
+// src/app/api/webhooks/clerk/route.ts (version corrigée)
 import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { Webhook } from 'svix';
@@ -80,9 +80,16 @@ async function handleUserCreated(userData: any) {
   }
 
   try {
-    // Créer l'utilisateur dans notre DB
-    const user = await db.user.create({
-      data: {
+    // Utiliser upsert pour éviter les erreurs de duplication
+    const user = await db.user.upsert({
+      where: { clerkId },
+      update: {
+        email,
+        username,
+        avatar: image_url || null,
+        lastLogin: new Date(),
+      },
+      create: {
         clerkId,
         email,
         username,
@@ -90,25 +97,34 @@ async function handleUserCreated(userData: any) {
       },
     });
 
-    // Créer le profil de jeu
-    await db.gameProfile.create({
-      data: {
-        userId: user.id,
-        totalPoints: 0,
-        citiesCount: 1,
-        rank: await getNextUserRank(),
-        level: 1,
-        experience: 0,
-      },
+    // Vérifier si le profil de jeu existe déjà
+    const existingProfile = await db.gameProfile.findUnique({
+      where: { userId: user.id },
     });
 
-    // Créer la première cité avec un nom par défaut
-    const cityName = `${username}_Capital`;
-    await createUserFirstCity(user.id, cityName);
+    if (!existingProfile) {
+      // Créer le profil de jeu
+      await db.gameProfile.create({
+        data: {
+          userId: user.id,
+          totalPoints: 0,
+          citiesCount: 1,
+          rank: await getNextUserRank(),
+          level: 1,
+          experience: 0,
+        },
+      });
 
-    console.log(`User created: ${user.id} with first city: ${cityName}`);
+      // Créer la première cité uniquement pour les nouveaux utilisateurs
+      const cityName = `${username}_Capital`;
+      await createUserFirstCity(user.id, cityName);
+
+      console.log(`New user created: ${user.id} with first city: ${cityName}`);
+    } else {
+      console.log(`User already exists: ${user.id} - profile updated`);
+    }
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error('Error creating/updating user:', error);
     throw error;
   }
 }
@@ -131,7 +147,8 @@ async function handleUserUpdated(userData: any) {
     console.log(`User updated: ${clerkId}`);
   } catch (error) {
     console.error('Error updating user:', error);
-    throw error;
+    // Ne pas relancer l'erreur pour les mises à jour
+    // throw error;
   }
 }
 
@@ -146,7 +163,8 @@ async function handleUserDeleted(userData: any) {
     console.log(`User deleted: ${clerkId}`);
   } catch (error) {
     console.error('Error deleting user:', error);
-    throw error;
+    // Ne pas relancer l'erreur si l'utilisateur n'existe pas
+    // throw error;
   }
 }
 
