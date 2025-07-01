@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ResourceDisplay } from '@/components/game/resources/resource-display';
 import { BuildingsList } from '@/components/game/buildings/buildings-list';
-import { BuildingQueue } from '@/components/game/buildings/building-queue';
+import { BuildingQueueStatus } from '@/components/game/buildings/building-queue-status';
 import { 
   Castle,
   Crown,
@@ -223,6 +223,7 @@ export default function CityManagementPage() {
                 {user?.username}
               </Badge>
               <UserButton 
+                afterSignOutUrl="/"
                 appearance={{
                   elements: {
                     avatarBox: "w-10 h-10"
@@ -339,7 +340,7 @@ export default function CityManagementPage() {
 
                 {/* Queue de construction */}
                 <div>
-                  <BuildingQueue cityId={cityId} />
+                  <BuildingQueueStatus cityId={cityId} />
                 </div>
               </div>
             </div>

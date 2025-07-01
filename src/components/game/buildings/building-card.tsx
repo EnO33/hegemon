@@ -16,7 +16,7 @@ import toast from 'react-hot-toast';
 interface BuildingCardProps {
   buildingType: BuildingType;
   existingBuilding?: DbBuilding;
-  city: DbCity;
+  city: DbCity & { buildingQueue?: Array<{ status: string; buildingType: string }> };
   onAction?: () => void;
 }
 
@@ -34,6 +34,11 @@ export const BuildingCard = ({ buildingType, existingBuilding, city, onAction }:
   const canAfford = city.wood >= cost.wood && 
                    city.stone >= cost.stone && 
                    city.silver >= cost.silver;
+
+  // Vérifier l'état de la queue
+  const currentQueue = city.buildingQueue?.filter(q => q.status === 'in_progress') || [];
+  const isInQueue = currentQueue.some(q => q.buildingType === buildingType);
+  const queueFull = currentQueue.length >= 2;
 
   const handleAction = async () => {
     setIsProcessing(true);
@@ -168,22 +173,49 @@ export const BuildingCard = ({ buildingType, existingBuilding, city, onAction }:
         )}
 
         {/* Bouton d'action */}
-        {!isMaxLevel && (
-          <Button 
-            onClick={handleAction}
-            disabled={!canAfford || isProcessing || missingRequirements.length > 0}
-            className="w-full"
-            variant={existingBuilding ? "outline" : "default"}
-          >
-            {isProcessing ? (
-              <span className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                {existingBuilding ? 'Amélioration...' : 'Construction...'}
-              </span>
-            ) : (
-              existingBuilding ? `Améliorer (Niv. ${nextLevel})` : 'Construire'
+        {!isMaxLevel && !isInQueue && (
+          <>
+            {queueFull && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-orange-700 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  Queue de construction pleine (2/2)
+                </div>
+                <p className="text-orange-600 text-xs mt-1">
+                  Attendez qu'une construction se termine
+                </p>
+              </div>
             )}
-          </Button>
+            
+            <Button 
+              onClick={handleAction}
+              disabled={!canAfford || isProcessing || missingRequirements.length > 0 || queueFull}
+              className="w-full"
+              variant={existingBuilding ? "outline" : "default"}
+            >
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  {existingBuilding ? 'Amélioration...' : 'Construction...'}
+                </span>
+              ) : (
+                existingBuilding ? `Améliorer (Niv. ${nextLevel})` : 'Construire'
+              )}
+            </Button>
+          </>
+        )}
+
+        {/* Statut si en queue */}
+        {isInQueue && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-blue-700 text-sm">
+              <Clock className="w-4 h-4" />
+              {existingBuilding ? 'Amélioration en cours' : 'Construction en cours'}
+            </div>
+            <p className="text-blue-600 text-xs mt-1">
+              Visible dans la queue de construction
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>

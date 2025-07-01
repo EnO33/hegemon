@@ -11,6 +11,22 @@ import type { DbBuilding, DbCity } from '@/types/database';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 
+// Fonction pour récupérer la queue de construction
+async function getBuildingQueue(cityId: string) {
+  try {
+    const response = await fetch('/api/game/building-queue');
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        return result.data.filter((item: any) => item.cityId === cityId);
+      }
+    }
+  } catch (error) {
+    console.error('Erreur chargement queue:', error);
+  }
+  return [];
+}
+
 export const BuildingsList = () => {
   const params = useParams();
   const cityId = params.cityId as string;
@@ -26,7 +42,12 @@ export const BuildingsList = () => {
       try {
         const result = await getUserCity(cityId);
         if (result.success && result.data) {
-          setCity(result.data);
+          // Charger aussi la queue de construction
+          const cityWithQueue = {
+            ...result.data,
+            buildingQueue: await getBuildingQueue(cityId)
+          };
+          setCity(cityWithQueue);
         }
       } catch (error) {
         console.error('Erreur chargement cité:', error);
@@ -59,7 +80,11 @@ export const BuildingsList = () => {
   const handleBuildingAction = async () => {
     const result = await getUserCity(cityId);
     if (result.success && result.data) {
-      setCity(result.data);
+      const cityWithQueue = {
+        ...result.data,
+        buildingQueue: await getBuildingQueue(cityId)
+      };
+      setCity(cityWithQueue);
     }
   };
 

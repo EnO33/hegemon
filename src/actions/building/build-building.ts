@@ -1,4 +1,4 @@
-// src/actions/building/build-building.ts (import manquant corrigé)
+// src/actions/building/build-building.ts (version avec queue améliorée)
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
@@ -12,6 +12,9 @@ const buildBuildingSchema = z.object({
   buildingType: z.string(),
   cityId: z.string().uuid(),
 });
+
+// Configuration : nombre maximum de constructions simultanées
+const MAX_BUILDING_QUEUE = 2;
 
 export async function buildBuilding(data: unknown) {
   try {
@@ -41,6 +44,11 @@ export async function buildBuilding(data: unknown) {
       },
       include: {
         buildings: true,
+        buildingQueue: {
+          where: {
+            status: 'in_progress'
+          }
+        }
       },
     });
 
@@ -52,6 +60,17 @@ export async function buildBuilding(data: unknown) {
     const existingBuilding = city.buildings.find(b => b.type === buildingType);
     if (existingBuilding) {
       throw new Error('Ce bâtiment existe déjà dans cette cité');
+    }
+
+    // Vérifier qu'il n'y a pas déjà une construction/amélioration de ce type en cours
+    const existingQueueForType = city.buildingQueue.find(q => q.buildingType === buildingType);
+    if (existingQueueForType) {
+      throw new Error('Une construction/amélioration de ce bâtiment est déjà en cours');
+    }
+
+    // Vérifier le nombre de constructions simultanées
+    if (city.buildingQueue.length >= MAX_BUILDING_QUEUE) {
+      throw new Error(`Maximum ${MAX_BUILDING_QUEUE} constructions simultanées autorisées`);
     }
 
     // Récupérer la configuration du bâtiment
@@ -75,18 +94,6 @@ export async function buildBuilding(data: unknown) {
     // Vérifier les ressources
     if (city.wood < cost.wood || city.stone < cost.stone || city.silver < cost.silver) {
       throw new Error('Ressources insuffisantes');
-    }
-
-    // Vérifier qu'il n'y a pas déjà une construction en cours dans cette cité
-    const existingQueue = await db.buildingQueue.findFirst({
-      where: {
-        cityId,
-        status: 'in_progress',
-      },
-    });
-
-    if (existingQueue) {
-      throw new Error('Une construction est déjà en cours dans cette cité');
     }
 
     const now = new Date();
@@ -128,10 +135,13 @@ export async function buildBuilding(data: unknown) {
     revalidatePath('/city');
     revalidatePath(`/city/${cityId}`);
 
+    const queuePosition = city.buildingQueue.length + 1;
+    const positionText = queuePosition === 1 ? '' : ` (Position ${queuePosition} dans la queue)`;
+
     return {
       success: true,
       data: result,
-      message: `Construction de ${buildingConfig.name} commencée !`,
+      message: `Construction de ${buildingConfig.name} commencée !${positionText}`,
     };
 
   } catch (error) {
@@ -176,6 +186,11 @@ export async function upgradeBuilding(data: unknown) {
       },
       include: {
         buildings: true,
+        buildingQueue: {
+          where: {
+            status: 'in_progress'
+          }
+        }
       },
     });
 
@@ -186,6 +201,19 @@ export async function upgradeBuilding(data: unknown) {
     const building = city.buildings.find(b => b.id === buildingId);
     if (!building) {
       throw new Error('Bâtiment non trouvé');
+    }
+
+    // Vérifier qu'il n'y a pas déjà une amélioration de ce bâtiment en cours
+    const existingQueueForType = city.buildingQueue.find(q => 
+      q.buildingType === building.type && q.action === 'upgrade'
+    );
+    if (existingQueueForType) {
+      throw new Error('Une amélioration de ce bâtiment est déjà en cours');
+    }
+
+    // Vérifier le nombre de constructions simultanées
+    if (city.buildingQueue.length >= MAX_BUILDING_QUEUE) {
+      throw new Error(`Maximum ${MAX_BUILDING_QUEUE} constructions simultanées autorisées`);
     }
 
     // Récupérer la configuration du bâtiment
@@ -207,18 +235,6 @@ export async function upgradeBuilding(data: unknown) {
     // Vérifier les ressources
     if (city.wood < cost.wood || city.stone < cost.stone || city.silver < cost.silver) {
       throw new Error('Ressources insuffisantes');
-    }
-
-    // Vérifier qu'il n'y a pas déjà une construction en cours
-    const existingQueue = await db.buildingQueue.findFirst({
-      where: {
-        cityId,
-        status: 'in_progress',
-      },
-    });
-
-    if (existingQueue) {
-      throw new Error('Une construction est déjà en cours dans cette cité');
     }
 
     const now = new Date();
@@ -259,10 +275,13 @@ export async function upgradeBuilding(data: unknown) {
     revalidatePath('/city');
     revalidatePath(`/city/${cityId}`);
 
+    const queuePosition = city.buildingQueue.length + 1;
+    const positionText = queuePosition === 1 ? '' : ` (Position ${queuePosition} dans la queue)`;
+
     return {
       success: true,
       data: result,
-      message: `Amélioration de ${buildingConfig.name} vers le niveau ${nextLevel} commencée !`,
+      message: `Amélioration de ${buildingConfig.name} vers le niveau ${nextLevel} commencée !${positionText}`,
     };
 
   } catch (error) {
