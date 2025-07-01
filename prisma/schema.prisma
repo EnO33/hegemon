@@ -1,0 +1,209 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Utilisateur (synchronisé avec Clerk)
+model User {
+  id        String   @id @default(uuid())
+  clerkId   String   @unique // ID de Clerk
+  email     String   @unique
+  username  String   @unique
+  avatar    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLogin DateTime?
+
+  // Relations
+  gameProfile GameProfile?
+  cities      City[]
+
+  @@map("users")
+}
+
+// Profil de jeu
+model GameProfile {
+  id          String @id @default(uuid())
+  userId      String @unique
+  totalPoints Int    @default(0)
+  citiesCount Int    @default(0)
+  rank        Int    @default(1)
+  level       Int    @default(1)
+  experience  Int    @default(0)
+
+  // Paramètres utilisateur
+  language      String  @default("fr")
+  notifications Boolean @default(true)
+  soundEnabled  Boolean @default(true)
+  theme         String  @default("auto")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("game_profiles")
+}
+
+// Cité
+model City {
+  id                  String   @id @default(uuid())
+  name                String
+  userId              String
+  x                   Int // Coordonnée X sur la carte
+  y                   Int // Coordonnée Y sur la carte
+  isCapital           Boolean  @default(false)
+  points              Int      @default(0)
+  lastResourceUpdate  DateTime @default(now())
+  
+  // Ressources actuelles
+  wood            Int @default(1000)
+  stone           Int @default(1000)
+  silver          Int @default(500)
+  population      Int @default(100)
+  populationUsed  Int @default(0)
+
+  // Production par heure
+  woodProduction       Int @default(100)
+  stoneProduction      Int @default(80)
+  silverProduction     Int @default(50)
+  populationCapacity   Int @default(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  buildings Building[]
+  units     Unit[]
+
+  @@unique([userId, name]) // Un utilisateur ne peut pas avoir 2 cités avec le même nom
+  @@map("cities")
+}
+
+// Bâtiment
+model Building {
+  id                   String    @id @default(uuid())
+  type                 String    // BuildingType enum
+  level                Int       @default(1)
+  cityId               String
+  isUpgrading          Boolean   @default(false)
+  upgradeCompletesAt   DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  city City @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  @@unique([cityId, type]) // Une seule instance de chaque type de bâtiment par cité
+  @@map("buildings")
+}
+
+// Unité militaire
+model Unit {
+  id                     String    @id @default(uuid())
+  type                   String    // UnitType enum
+  quantity               Int       @default(0)
+  cityId                 String
+  isRecruiting           Boolean   @default(false)
+  recruitmentCompletesAt DateTime?
+  currentMissionId       String?   // Pour les déplacements/attaques
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  city City @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  @@unique([cityId, type]) // Une seule entrée par type d'unité par cité
+  @@map("units")
+}
+
+// Queue de construction
+model BuildingQueue {
+  id            String   @id @default(uuid())
+  cityId        String
+  buildingType  String   // BuildingType enum
+  action        String   // 'build' | 'upgrade'
+  targetLevel   Int
+  
+  // Coûts
+  woodCost   Int
+  stoneCost  Int
+  silverCost Int
+  
+  duration      Int      @default(0) // en secondes
+  startedAt     DateTime @default(now())
+  completesAt   DateTime
+  status        String   @default("in_progress") // 'pending' | 'in_progress' | 'completed' | 'cancelled'
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("building_queue")
+}
+
+// Queue de recrutement
+model RecruitmentQueue {
+  id         String @id @default(uuid())
+  cityId     String
+  unitType   String // UnitType enum
+  quantity   Int
+  
+  // Coûts totaux
+  woodCost       Int
+  stoneCost      Int
+  silverCost     Int
+  populationCost Int
+  
+  timePerUnit   Int      @default(0) // en secondes
+  totalDuration Int      @default(0) // en secondes
+  startedAt     DateTime @default(now())
+  completesAt   DateTime
+  completed     Int      @default(0) // Unités déjà recrutées
+  status        String   @default("in_progress") // 'pending' | 'in_progress' | 'completed' | 'cancelled'
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("recruitment_queue")
+}
+
+// Événements de cité (pour les notifications)
+model CityEvent {
+  id          String   @id @default(uuid())
+  cityId      String
+  type        String   // 'building_completed' | 'unit_recruited' | 'attack_incoming' etc.
+  data        Json     // Données spécifiques à l'événement
+  scheduledAt DateTime
+  completed   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("city_events")
+}
+
+// Recherches/Technologies (pour plus tard)
+model Research {
+  id          String    @id @default(uuid())
+  userId      String
+  technology  String    // ID de la technologie
+  isCompleted Boolean   @default(false)
+  startedAt   DateTime  @default(now())
+  completesAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, technology])
+  @@map("research")
+}

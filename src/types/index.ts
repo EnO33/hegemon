@@ -5,3 +5,4 @@ export * from './city';
 export * from './building';
 export * from './unit';
 export * from './api';
+export * from './database';
