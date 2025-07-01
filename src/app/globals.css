@@ -1,7 +1,89 @@
+/* src/app/globals.css - Ajout des styles CSS modernes */
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+
+/* Animations et patterns modernes */
+@keyframes gradient-x {
+  0%, 100% {
+    transform: translateX(0%);
+  }
+  50% {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-gradient-x {
+  animation: gradient-x 15s ease infinite;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Background grid pattern */
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, theme('colors.gray.200') 1px, transparent 1px),
+    linear-gradient(to bottom, theme('colors.gray.200') 1px, transparent 1px);
+  background-size: 2rem 2rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .bg-grid-pattern {
+    background-image: 
+      linear-gradient(to right, theme('colors.gray.700') 1px, transparent 1px),
+      linear-gradient(to bottom, theme('colors.gray.700') 1px, transparent 1px);
+  }
+}
+
+/* Scrollbar moderne */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: theme('colors.amber.400');
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.amber.500');
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: theme('colors.amber.600');
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.amber.500');
+}
+
+/* Selection colors */
+::selection {
+  background: theme('colors.amber.200');
+  color: theme('colors.amber.900');
+}
+
+.dark ::selection {
+  background: theme('colors.amber.800');
+  color: theme('colors.amber.100');
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -44,7 +126,7 @@
 }
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.129 0.042 264.695);
   --card: oklch(1 0 0);
@@ -118,5 +200,6 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
